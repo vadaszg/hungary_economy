@@ -43,6 +43,31 @@
             font-weight: 600;
             min-width: 220px;
         }
+        .country-button-row {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-top: 1rem;
+        }
+        .country-button {
+            border: 0;
+            border-radius: 999px;
+            padding: 0.55rem 0.85rem;
+            background: rgba(255,255,255,0.18);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s ease, transform 0.2s ease;
+        }
+        .country-button:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-1px);
+        }
+        .country-button.active {
+            background: white;
+            color: #1e3a8a;
+        }
         .container { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
         .card {
             background: white;
@@ -124,6 +149,7 @@
         <label for="country-select">Ország:</label>
         <select id="country-select"></select>
     </div>
+    <div id="country-buttons" class="country-button-row" aria-label="Országok kiválasztása"></div>
 </header>
 
 <div class="container">
@@ -185,6 +211,7 @@ const COUNTRIES = [
 ];
 
 const countrySelect = document.getElementById('country-select');
+const countryButtonsContainer = document.getElementById('country-buttons');
 const countryTitle = document.getElementById('country-title');
 const summaryContainer = document.getElementById('summary');
 const chartContainer = document.getElementById('chart');
@@ -269,6 +296,30 @@ function populateCountrySelect() {
         option.value = country.code;
         option.textContent = `${country.flag} ${country.name}`;
         countrySelect.appendChild(option);
+    });
+}
+
+function populateCountryButtons() {
+    countryButtonsContainer.innerHTML = '';
+    COUNTRIES.forEach(country => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'country-button';
+        button.textContent = `${country.flag} ${country.name}`;
+        button.dataset.code = country.code;
+        button.addEventListener('click', () => {
+            countrySelect.value = country.code;
+            setActiveCountry(country.code);
+            loadCountry(country.code);
+        });
+        countryButtonsContainer.appendChild(button);
+    });
+}
+
+function setActiveCountry(countryCode) {
+    countrySelect.value = countryCode;
+    Array.from(countryButtonsContainer.children).forEach(button => {
+        button.classList.toggle('active', button.dataset.code === countryCode);
     });
 }
 
@@ -531,8 +582,12 @@ async function loadCountry(countryCode) {
 
 function init() {
     populateCountrySelect();
-    countrySelect.value = 'HUN';
-    countrySelect.addEventListener('change', event => loadCountry(event.target.value));
+    populateCountryButtons();
+    setActiveCountry('HUN');
+    countrySelect.addEventListener('change', event => {
+        setActiveCountry(event.target.value);
+        loadCountry(event.target.value);
+    });
     loadCountry('HUN');
 }
 
