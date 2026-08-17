@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magyarország gazdasági mutatói – interaktív dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #f7f9fc;
+            color: #1f2937;
+        }
+        header {
+            background: linear-gradient(90deg, #1e3a8a, #2563eb);
+            color: white;
+            padding: 2rem 1rem;
+            text-align: center;
+        }
+        header h1 { margin: 0; font-size: 1.6rem; }
+        header p { margin: 0.5rem 0 0; opacity: 0.9; font-size: 0.95rem; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .card h2 { margin-top: 0; font-size: 1.15rem; color: #1e3a8a; }
+        .indicator-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .indicator {
+            background: #eff6ff;
+            border-left: 4px solid #2563eb;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+        .indicator strong {
+            display: block;
+            font-size: 0.85rem;
+            color: #374151;
+            margin-bottom: 0.3rem;
+        }
+        .indicator span {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #1e3a8a;
+        }
+        #chart { width: 100%; height: 800px; }
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #6b7280;
+        }
+        .error {
+            color: #dc2626;
+            background: #fef2f2;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+        footer {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: #6b7280;
+            font-size: 0.85rem;
+        }
+        footer a { color: #2563eb; text-decoration: none; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🇭🇺 Magyarország fő gazdasági mutatói</h1>
+    <p>Interaktív idősorok a Világbank nyílt adataiból</p>
+</header>
+
+<div class="container">
+    <div class="card">
+        <h2>Utolsó elérhető értékek</h2>
+        <div id="summary" class="indicator-grid">
+            <div class="loading">Adatok betöltése...</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div id="chart"><div class="loading">Diagramok betöltése...</div></div>
+    </div>
+</div>
+
+<footer>
+    Forrás: <a href="https://data.worldbank.org/country/hungary" target="_blank">World Bank Open Data – Hungary</a> • 
+    Készült Plotly.js-sel
+</footer>
+
+<script>
+const INDICATORS = [
+    { name: 'GDP növekedés (%)', code: 'NY.GDP.MKTP.KD.ZG', color: '#2E8B57' },
+    { name: 'Infláció (fogyasztói árak, %)', code: 'FP.CPI.TOTL.ZG', color: '#DC143C' },
+    { name: 'Munkanélküliségi ráta (%)', code: 'SL.UEM.TOTL.ZS', color: '#1E90FF' },
+    { name: 'Államadósság / GDP (%)', code: 'GC.DOD.TOTL.GD.ZS', color: '#8A2BE2' },
+    { name: 'Beruházás / GDP (%)', code: 'NE.GDI.TOTL.ZS', color: '#FF8C00' }
+];
+
+async function fetchIndicator(code) {
+    const url = `https://api.worldbank.org/v2/country/HUN/indicator/${code}?format=json&per_page=500&date=2000:2024`;
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (!data[1]) return [];
+        return data[1]
+            .filter(item => item.value !== null && item.date !== null)
+            .map(item => ({ year: parseInt(item.date), value: parseFloat(item.value) }))
+            .sort((a, b) => a.year - b.year);
+    } catch (err) {
+        console.error('Hiba a(z) ' + code + ' letöltésekor:', err);
+        return [];
+    }
+}
+
+function renderSummary(allData) {
+    const container = document.getElementById('summary');
+    container.innerHTML = '';
+    
+    allData.forEach(item => {
+        if (item.data.length === 0) return;
+        const latest = item.data[item.data.length - 1];
+        const prev = item.data[item.data.length - 2];
+        let change = '';
+        if (prev) {
+            const diff = latest.value - prev.value;
+            const arrow = diff >= 0 ? '↑' : '↓';
+            change = `<br><small style="color:${diff >= 0 ? '#16a34a' : '#dc2626'}">${arrow} ${Math.abs(diff).toFixed(2)} az előző évhez képest</small>`;
+        }
+        
+        const div = document.createElement('div');
+        div.className = 'indicator';
+        div.innerHTML = `
+            <strong>${item.name}</strong>
+            <span>${latest.value.toFixed(2)}%</span>
+            ${change}
+            <br><small style="color:#6b7280">${latest.year}</small>
+        `;
+        container.appendChild(div);
+    });
+}
+
+async function init() {
+    const allData = [];
+    for (const ind of INDICATORS) {
+        const data = await fetchIndicator(ind.code);
+        allData.push({ ...ind, data });
+    }
+    
+    renderSummary(allData);
+    
+    const traces = [];
+    const validData = allData.filter(item => item.data.length > 0);
+    const rows = validData.length;
+    
+    validData.forEach((item, index) => {
+        const rowIndex = index + 1;
+        traces.push({
+            x: item.data.map(d => d.year),
+            y: item.data.map(d => d.value),
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: item.name,
+            xaxis: `x${rowIndex > 1 ? rowIndex : ''}`,
+            yaxis: `y${rowIndex > 1 ? rowIndex : ''}`,
+            line: { color: item.color, width: 2.5 },
+            marker: { size: 6 },
+            hovertemplate: `<b>${item.name}</b><br>Év: %{x}<br>Érték: %{y:.2f}%<extra></extra>`
+        });
+    });
+    
+    if (traces.length === 0) {
+        document.getElementById('chart').innerHTML = '<div class="error">Nem sikerült betölteni az adatokat.</div>';
+        return;
+    }
+    
+    const layout = {
+        grid: { rows: rows, columns: 1, pattern: 'independent', rowgap: 0.08 },
+        height: 200 * rows + 100,
+        title: {
+            text: 'Magyarország fő makrogazdasági mutatói időben',
+            font: { size: 18 }
+        },
+        hovermode: 'x unified',
+        showlegend: false,
+        margin: { l: 60, r: 30, t: 80, b: 40 },
+        template: 'plotly_white'
+    };
+    
+    for (let i = 0; i < rows; i++) {
+        const xi = i === 0 ? 'xaxis' : `xaxis${i + 1}`;
+        const yi = i === 0 ? 'yaxis' : `yaxis${i + 1}`;
+        layout[xi] = { 
+            title: i === rows - 1 ? 'Év' : '',
+            tickmode: 'linear',
+            dtick: 2,
+            matches: 'x'
+        };
+        layout[yi] = { title: '%' };
+    }
+    
+    Plotly.newPlot('chart', traces, layout, { responsive: true });
+}
+
+init();
+</script>
+
+</body>
+</html>
