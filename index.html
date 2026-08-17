@@ -52,6 +52,24 @@
             margin-bottom: 1.5rem;
         }
         .card h2 { margin-top: 0; font-size: 1.15rem; color: #1e3a8a; }
+        .fallback-card {
+            background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+            border: 1px solid #bfdbfe;
+        }
+        .country-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-top: 0.9rem;
+        }
+        .country-pill {
+            background: #dbeafe;
+            color: #1d4ed8;
+            padding: 0.45rem 0.8rem;
+            border-radius: 999px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
         .indicator-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -109,6 +127,20 @@
 </header>
 
 <div class="container">
+    <div class="card fallback-card">
+        <h2>Rövid áttekintés</h2>
+        <p>Ez az oldal egy gyors, látható összefoglalót is kínál a Közép-Európa régió országairól, még akkor is, ha a részletes adatok betöltése késik.</p>
+        <div class="country-list">
+            <span class="country-pill">🇭🇺 Magyarország</span>
+            <span class="country-pill">🇵🇱 Lengyelország</span>
+            <span class="country-pill">🇨🇿 Csehország</span>
+            <span class="country-pill">🇸🇰 Szlovákia</span>
+            <span class="country-pill">🇦🇹 Ausztria</span>
+            <span class="country-pill">🇸🇮 Szlovénia</span>
+            <span class="country-pill">🇷🇴 Románia</span>
+            <span class="country-pill">🇭🇷 Horvátország</span>
+        </div>
+    </div>
     <div class="card">
         <h2 id="country-title">Utolsó elérhető értékek</h2>
         <div id="summary" class="indicator-grid">
@@ -120,6 +152,12 @@
         <div id="chart"><div class="loading">Diagramok betöltése...</div></div>
     </div>
 </div>
+
+<noscript>
+    <div class="container">
+        <div class="card error">A teljes interaktív tartalom megjelenítéséhez engedélyezd a JavaScriptet.</div>
+    </div>
+</noscript>
 
 <footer>
     Forrás: <a href="https://data.worldbank.org/" target="_blank">World Bank Open Data</a> • 
