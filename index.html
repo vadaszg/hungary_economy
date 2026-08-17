@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Magyarország gazdasági mutatói – interaktív dashboard</title>
+    <title>Közép-Európa gazdasági mutatói – interaktív dashboard</title>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
         * { box-sizing: border-box; }
@@ -21,6 +21,28 @@
         }
         header h1 { margin: 0; font-size: 1.6rem; }
         header p { margin: 0.5rem 0 0; opacity: 0.9; font-size: 0.95rem; }
+        .select-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.7rem;
+            margin-top: 0.9rem;
+            flex-wrap: wrap;
+            font-size: 0.95rem;
+        }
+        .select-row label {
+            font-weight: 600;
+            opacity: 0.95;
+        }
+        .select-row select {
+            padding: 0.65rem 0.85rem;
+            border: 1px solid rgba(255,255,255,0.35);
+            border-radius: 999px;
+            background: #eff6ff;
+            color: #1e3a8a;
+            font-weight: 600;
+            min-width: 220px;
+        }
         .container { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
         .card {
             background: white;
@@ -78,13 +100,17 @@
 <body>
 
 <header>
-    <h1>🇭🇺 Magyarország fő gazdasági mutatói</h1>
-    <p>Interaktív idősorok a Világbank nyílt adataiból</p>
+    <h1>🌍 Közép-Európa gazdasági mutatói</h1>
+    <p>Válassz egy országot a régióból, és nézd meg az alapvető makrogazdasági adatokat</p>
+    <div class="select-row">
+        <label for="country-select">Ország:</label>
+        <select id="country-select"></select>
+    </div>
 </header>
 
 <div class="container">
     <div class="card">
-        <h2>Utolsó elérhető értékek</h2>
+        <h2 id="country-title">Utolsó elérhető értékek</h2>
         <div id="summary" class="indicator-grid">
             <div class="loading">Adatok betöltése...</div>
         </div>
@@ -96,7 +122,7 @@
 </div>
 
 <footer>
-    Forrás: <a href="https://data.worldbank.org/country/hungary" target="_blank">World Bank Open Data – Hungary</a> • 
+    Forrás: <a href="https://data.worldbank.org/" target="_blank">World Bank Open Data</a> • 
     Készült Plotly.js-sel
 </footer>
 
@@ -109,8 +135,34 @@ const INDICATORS = [
     { name: 'Beruházás / GDP (%)', code: 'NE.GDI.TOTL.ZS', color: '#FF8C00' }
 ];
 
-async function fetchIndicator(code) {
-    const url = `https://api.worldbank.org/v2/country/HUN/indicator/${code}?format=json&per_page=500&date=2000:2024`;
+const COUNTRIES = [
+    { name: 'Magyarország', code: 'HUN', flag: '🇭🇺' },
+    { name: 'Lengyelország', code: 'POL', flag: '🇵🇱' },
+    { name: 'Csehország', code: 'CZE', flag: '🇨🇿' },
+    { name: 'Szlovákia', code: 'SVK', flag: '🇸🇰' },
+    { name: 'Ausztria', code: 'AUT', flag: '🇦🇹' },
+    { name: 'Szlovénia', code: 'SVN', flag: '🇸🇮' },
+    { name: 'Románia', code: 'ROU', flag: '🇷🇴' },
+    { name: 'Horvátország', code: 'HRV', flag: '🇭🇷' }
+];
+
+const countrySelect = document.getElementById('country-select');
+const countryTitle = document.getElementById('country-title');
+const summaryContainer = document.getElementById('summary');
+const chartContainer = document.getElementById('chart');
+
+function populateCountrySelect() {
+    countrySelect.innerHTML = '';
+    COUNTRIES.forEach(country => {
+        const option = document.createElement('option');
+        option.value = country.code;
+        option.textContent = `${country.flag} ${country.name}`;
+        countrySelect.appendChild(option);
+    });
+}
+
+async function fetchIndicator(code, countryCode) {
+    const url = `https://api.worldbank.org/v2/country/${countryCode}/indicator/${code}?format=json&per_page=500&date=2000:2024`;
     try {
         const response = await fetch(url);
         const data = await response.json();
@@ -125,12 +177,18 @@ async function fetchIndicator(code) {
     }
 }
 
-function renderSummary(allData) {
-    const container = document.getElementById('summary');
-    container.innerHTML = '';
-    
-    allData.forEach(item => {
-        if (item.data.length === 0) return;
+function renderSummary(allData, country) {
+    summaryContainer.innerHTML = '';
+
+    const visibleData = allData.filter(item => item.data.length > 0);
+    if (visibleData.length === 0) {
+        summaryContainer.innerHTML = '<div class="error">Nem sikerült betölteni az adatokat ehhez az országhoz.</div>';
+        return;
+    }
+
+    countryTitle.textContent = `${country.flag} ${country.name} utolsó elérhető értékei`;
+
+    visibleData.forEach(item => {
         const latest = item.data[item.data.length - 1];
         const prev = item.data[item.data.length - 2];
         let change = '';
@@ -139,7 +197,7 @@ function renderSummary(allData) {
             const arrow = diff >= 0 ? '↑' : '↓';
             change = `<br><small style="color:${diff >= 0 ? '#16a34a' : '#dc2626'}">${arrow} ${Math.abs(diff).toFixed(2)} az előző évhez képest</small>`;
         }
-        
+
         const div = document.createElement('div');
         div.className = 'indicator';
         div.innerHTML = `
@@ -148,23 +206,15 @@ function renderSummary(allData) {
             ${change}
             <br><small style="color:#6b7280">${latest.year}</small>
         `;
-        container.appendChild(div);
+        summaryContainer.appendChild(div);
     });
 }
 
-async function init() {
-    const allData = [];
-    for (const ind of INDICATORS) {
-        const data = await fetchIndicator(ind.code);
-        allData.push({ ...ind, data });
-    }
-    
-    renderSummary(allData);
-    
+function renderChart(allData, country) {
     const traces = [];
     const validData = allData.filter(item => item.data.length > 0);
     const rows = validData.length;
-    
+
     validData.forEach((item, index) => {
         const rowIndex = index + 1;
         traces.push({
@@ -180,17 +230,17 @@ async function init() {
             hovertemplate: `<b>${item.name}</b><br>Év: %{x}<br>Érték: %{y:.2f}%<extra></extra>`
         });
     });
-    
+
     if (traces.length === 0) {
-        document.getElementById('chart').innerHTML = '<div class="error">Nem sikerült betölteni az adatokat.</div>';
+        chartContainer.innerHTML = '<div class="error">Nem sikerült betölteni az adatokat.</div>';
         return;
     }
-    
+
     const layout = {
         grid: { rows: rows, columns: 1, pattern: 'independent', rowgap: 0.08 },
         height: 200 * rows + 100,
         title: {
-            text: 'Magyarország fő makrogazdasági mutatói időben',
+            text: `${country.name} fő makrogazdasági mutatói időben`,
             font: { size: 18 }
         },
         hovermode: 'x unified',
@@ -198,11 +248,11 @@ async function init() {
         margin: { l: 60, r: 30, t: 80, b: 40 },
         template: 'plotly_white'
     };
-    
+
     for (let i = 0; i < rows; i++) {
         const xi = i === 0 ? 'xaxis' : `xaxis${i + 1}`;
         const yi = i === 0 ? 'yaxis' : `yaxis${i + 1}`;
-        layout[xi] = { 
+        layout[xi] = {
             title: i === rows - 1 ? 'Év' : '',
             tickmode: 'linear',
             dtick: 2,
@@ -210,8 +260,35 @@ async function init() {
         };
         layout[yi] = { title: '%' };
     }
-    
+
     Plotly.newPlot('chart', traces, layout, { responsive: true });
+}
+
+async function loadCountry(countryCode) {
+    const country = COUNTRIES.find(item => item.code === countryCode) || COUNTRIES[0];
+    summaryContainer.innerHTML = '<div class="loading">Adatok betöltése...</div>';
+    chartContainer.innerHTML = '<div class="loading">Diagramok betöltése...</div>';
+
+    try {
+        const allData = await Promise.all(INDICATORS.map(async indicator => {
+            const data = await fetchIndicator(indicator.code, country.code);
+            return { ...indicator, data };
+        }));
+
+        renderSummary(allData, country);
+        renderChart(allData, country);
+    } catch (err) {
+        console.error('Hiba az adatok betöltésekor:', err);
+        summaryContainer.innerHTML = '<div class="error">Nem sikerült betölteni az adatokat.</div>';
+        chartContainer.innerHTML = '<div class="error">Nem sikerült betölteni az adatokat.</div>';
+    }
+}
+
+function init() {
+    populateCountrySelect();
+    countrySelect.value = 'HUN';
+    countrySelect.addEventListener('change', event => loadCountry(event.target.value));
+    loadCountry('HUN');
 }
 
 init();
