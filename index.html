@@ -286,10 +286,141 @@ function renderSummary(allData, country) {
     });
 }
 
+function renderChartFallback(validData, country) {
+    const width = 900;
+    const height = 360;
+    const padding = { top: 36, right: 24, bottom: 48, left: 56 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+
+    const allPoints = validData.flatMap(item => item.data);
+    const years = allPoints.map(point => point.year);
+    const values = allPoints.map(point => point.value);
+    const xMin = Math.min(...years);
+    const xMax = Math.max(...years);
+    const yMin = Math.min(...values);
+    const yMax = Math.max(...values);
+    const yRange = yMax - yMin || 1;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', '360');
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', `${country.name} makrogazdasági mutatói`);
+
+    const gridGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    gridGroup.setAttribute('stroke', '#d1d5db');
+    gridGroup.setAttribute('stroke-width', '1');
+    for (let step = 0; step <= 4; step++) {
+        const y = padding.top + (chartHeight / 4) * step;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', padding.left);
+        line.setAttribute('x2', width - padding.right);
+        line.setAttribute('y1', y);
+        line.setAttribute('y2', y);
+        gridGroup.appendChild(line);
+    }
+    svg.appendChild(gridGroup);
+
+    const xScale = value => padding.left + ((value - xMin) / (xMax - xMin || 1)) * chartWidth;
+    const yScale = value => padding.top + chartHeight - ((value - yMin) / yRange) * chartHeight;
+
+    validData.forEach(item => {
+        const points = item.data.map(point => `${xScale(point.year)},${yScale(point.value)}`).join(' ');
+        const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        polyline.setAttribute('fill', 'none');
+        polyline.setAttribute('stroke', item.color);
+        polyline.setAttribute('stroke-width', '3');
+        polyline.setAttribute('points', points);
+        svg.appendChild(polyline);
+
+        item.data.forEach(point => {
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', xScale(point.year));
+            circle.setAttribute('cy', yScale(point.value));
+            circle.setAttribute('r', '4');
+            circle.setAttribute('fill', item.color);
+            svg.appendChild(circle);
+        });
+    });
+
+    const labelGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    labelGroup.setAttribute('font-size', '12');
+    labelGroup.setAttribute('fill', '#374151');
+    validData.forEach((item, index) => {
+        const rowY = padding.top + 16 + (index * 18);
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', padding.left);
+        rect.setAttribute('y', rowY - 12);
+        rect.setAttribute('width', '12');
+        rect.setAttribute('height', '12');
+        rect.setAttribute('fill', item.color);
+        labelGroup.appendChild(rect);
+
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', padding.left + 20);
+        text.setAttribute('y', rowY);
+        text.textContent = item.name;
+        labelGroup.appendChild(text);
+    });
+    svg.appendChild(labelGroup);
+
+    const axisGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    axisGroup.setAttribute('stroke', '#6b7280');
+    axisGroup.setAttribute('stroke-width', '1');
+    const xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    xAxis.setAttribute('x1', padding.left);
+    xAxis.setAttribute('x2', width - padding.right);
+    xAxis.setAttribute('y1', height - padding.bottom);
+    xAxis.setAttribute('y2', height - padding.bottom);
+    axisGroup.appendChild(xAxis);
+
+    const yAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    yAxis.setAttribute('x1', padding.left);
+    yAxis.setAttribute('x2', padding.left);
+    yAxis.setAttribute('y1', padding.top);
+    yAxis.setAttribute('y2', height - padding.bottom);
+    axisGroup.appendChild(yAxis);
+    svg.appendChild(axisGroup);
+
+    const axisLabels = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    axisLabels.setAttribute('font-size', '11');
+    axisLabels.setAttribute('fill', '#6b7280');
+    const xLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    xLabel.setAttribute('x', width / 2);
+    xLabel.setAttribute('y', height - 16);
+    xLabel.setAttribute('text-anchor', 'middle');
+    xLabel.textContent = 'Év';
+    axisLabels.appendChild(xLabel);
+
+    const yLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    yLabel.setAttribute('x', 18);
+    yLabel.setAttribute('y', height / 2);
+    yLabel.setAttribute('text-anchor', 'middle');
+    yLabel.setAttribute('transform', `rotate(-90 18 ${height / 2})`);
+    yLabel.textContent = 'Érték (%)';
+    axisLabels.appendChild(yLabel);
+    svg.appendChild(axisLabels);
+
+    chartContainer.innerHTML = '';
+    chartContainer.appendChild(svg);
+}
+
 function renderChart(allData, country) {
     const traces = [];
     const validData = allData.filter(item => item.data.length > 0);
     const rows = validData.length;
+
+    if (validData.length === 0) {
+        chartContainer.innerHTML = '<div class="error">Nem sikerült betölteni az adatokat.</div>';
+        return;
+    }
+
+    if (typeof window.Plotly === 'undefined') {
+        renderChartFallback(validData, country);
+        return;
+    }
 
     validData.forEach((item, index) => {
         const rowIndex = index + 1;
@@ -306,11 +437,6 @@ function renderChart(allData, country) {
             hovertemplate: `<b>${item.name}</b><br>Év: %{x}<br>Érték: %{y:.2f}%<extra></extra>`
         });
     });
-
-    if (traces.length === 0) {
-        chartContainer.innerHTML = '<div class="error">Nem sikerült betölteni az adatokat.</div>';
-        return;
-    }
 
     const layout = {
         grid: { rows: rows, columns: 1, pattern: 'independent', rowgap: 0.08 },
@@ -337,7 +463,12 @@ function renderChart(allData, country) {
         layout[yi] = { title: '%' };
     }
 
-    Plotly.newPlot('chart', traces, layout, { responsive: true });
+    try {
+        Plotly.newPlot('chart', traces, layout, { responsive: true });
+    } catch (err) {
+        console.warn('A Plotly diagram megjelenítése sikertelen, fallback SVG használata:', err);
+        renderChartFallback(validData, country);
+    }
 }
 
 async function loadCountry(countryCode) {
